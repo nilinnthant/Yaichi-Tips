@@ -221,15 +221,17 @@
     .columns { grid-template-columns: 1fr; }
   }
   @media print {
-    body * { visibility: hidden; }
-    #reportOut, #reportOut * { visibility: visible; }
+    .topbar { display: none !important; }
+    .wrap > *:not(.report-section) { display: none !important; }
+    .wrap { padding: 0; max-width: 100%; }
+    .report-section { margin: 0; border: none; padding: 0; }
+    .report-section > *:not(#reportOut) { display: none !important; }
     #reportOut {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
       border: none;
       background: #fff;
+      margin: 0;
+      padding: 0;
+      box-shadow: none;
     }
   }
 </style>
@@ -262,8 +264,47 @@
       <input type="number" id="totalCash" value="0" min="0" step="0.01" />
     </div>
     <div>
-      <label for="cashSales">Cash sales</label>
+      <label for="cashSales" id="cashSalesLabel">Cash sales</label>
       <input type="number" id="cashSales" value="0" min="0" step="0.01" />
+    </div>
+  </div>
+
+  <div style="display:flex; align-items:center; gap:16px; margin-bottom:1rem; flex-wrap:wrap;">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <input type="checkbox" id="enableZelle" style="width:auto; height:auto;" />
+      <label for="enableZelle" style="font-size:13px; color:var(--text-secondary); margin:0;">Include Zelle</label>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <input type="checkbox" id="enableVenmo" style="width:auto; height:auto;" />
+      <label for="enableVenmo" style="font-size:13px; color:var(--text-secondary); margin:0;">Include Venmo</label>
+    </div>
+  </div>
+
+  <div id="zelleSection" style="display:none; margin-bottom:1rem;">
+    <div class="grid3">
+      <div>
+        <label for="zelleSales">Zelle sales</label>
+        <input type="number" id="zelleSales" value="0" min="0" step="0.01" />
+      </div>
+      <div>
+        <label for="zelleTips">Zelle tips</label>
+        <input type="number" id="zelleTips" value="0" min="0" step="0.01" />
+      </div>
+      <div></div>
+    </div>
+  </div>
+
+  <div id="venmoSection" style="display:none; margin-bottom:1rem;">
+    <div class="grid3">
+      <div>
+        <label for="venmoSales">Venmo sales</label>
+        <input type="number" id="venmoSales" value="0" min="0" step="0.01" />
+      </div>
+      <div>
+        <label for="venmoTips">Venmo tips</label>
+        <input type="number" id="venmoTips" value="0" min="0" step="0.01" />
+      </div>
+      <div></div>
     </div>
   </div>
 
@@ -280,6 +321,11 @@
       <p class="stat-label">Fixed split</p>
       <p style="font-size:13px; margin:0;">70% servers &rarr; 30% kitchen</p>
     </div>
+  </div>
+
+  <div id="transferTipRow" class="card" style="display:none; margin-bottom:1rem;">
+    <p class="stat-label">Transfer tips (Zelle + Venmo)</p>
+    <p class="stat-value" id="transferTipOut">$0.00</p>
   </div>
 
   <div class="split-summary">
@@ -338,6 +384,15 @@
 
   function fmt(n) {
     return '$' + (Math.round(n * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  // Right-justifies the digits of a formatted amount while keeping the $ in a fixed column,
+  // e.g. alignAmt('$840.00', 8) -> '$  840.00', alignAmt('$1,200.00', 8) -> '$1,200.00'
+  function alignAmt(amtStr, digitWidth) {
+    return '$' + amtStr.slice(1).padStart(digitWidth);
+  }
+  function digitLen(amtStr) {
+    return amtStr.length - 1;
   }
 
   function nameOptions() {
@@ -405,9 +460,16 @@
       '<input type="number" min="0" step="1" placeholder="h" class="sh" />' +
       '<span>h</span>' +
       '<input type="number" min="0" max="59" step="1" placeholder="m" class="sm" />' +
-      '<span>m</span>';
+      '<span>m</span>' +
+      '<button type="button" class="shiftDel iconbtn" aria-label="Remove shift" style="width:26px; height:26px; font-size:13px;">&times;</button>';
     shiftsContainer.appendChild(entry);
     entry.querySelectorAll('input').forEach(inp => inp.addEventListener('input', calc));
+    entry.querySelector('.shiftDel').addEventListener('click', function() {
+      if (shiftsContainer.querySelectorAll('.shift-entry').length > 1) {
+        entry.remove();
+        calc();
+      }
+    });
   }
 
   function addServerRow(initial) {
@@ -527,8 +589,11 @@
     lines.push(dateHeader);
     lines.push('='.repeat(dateHeader.length));
     lines.push('');
+
+    const rowNames = data.rows.map((r, i) => rowName(r, i));
+    const nameWidth = Math.max.apply(null, rowNames.map(n => n.length).concat([0]));
     data.rows.forEach((r, i) => {
-      const name = rowName(r, i);
+      const name = rowNames[i].padEnd(nameWidth);
       if (data.mode === 'equal' || data.rate === 0) {
         lines.push(name + ' => ' + fmt(data.shares[i]));
       } else {
@@ -536,27 +601,84 @@
       }
     });
     lines.push('');
-    if (data.totalCash === 0 && data.cashSales === 0) {
-      lines.push('No cash, no cash sales');
-    } else {
-      lines.push('CASH');
-      lines.push('====');
-      lines.push('Sales: ' + fmt(data.cashSales));
-      lines.push('Tips: ' + fmt(data.cashTip));
-      lines.push('Total Cash: ' + fmt(data.totalCash));
+
+    function paymentRows(name, sales, tips, total, includeSales) {
+      const hasSales = includeSales && Math.abs(sales) > 0.001;
+      const hasTips = Math.abs(tips) > 0.001;
+      if (!hasSales && !hasTips) return null;
+
+      const totalLabel = 'Total ' + name;
+      const rows = [];
+      if (includeSales) rows.push(['Sales', fmt(sales)]);
+      rows.push(['Tips', fmt(tips)]);
+      const totalVal = fmt(total);
+
+      const amtWidth = Math.max.apply(null,
+        rows.map(r => digitLen(r[1])).concat([digitLen(totalVal)])
+      );
+
+      const bodyLines = rows.map(r => r[0] + ': ' + alignAmt(r[1], amtWidth));
+      const totalLine = totalLabel + ': ' + alignAmt(totalVal, amtWidth);
+      return { name: name, bodyLines: bodyLines, totalLine: totalLine };
     }
-    lines.push('');
+
+    const paymentGroups = [];
+    const cashRows = paymentRows('Cash', data.cashSales, data.cashTip, data.totalCash, true);
+    if (cashRows) paymentGroups.push(cashRows);
+    if (data.venmoEnabled) {
+      const venmoRows = paymentRows('Venmo', data.venmoSales, data.venmoTips, data.venmoSales + data.venmoTips, true);
+      if (venmoRows) paymentGroups.push(venmoRows);
+    }
+    if (data.zelleEnabled) {
+      const zelleRows = paymentRows('Zelle', data.zelleSales, data.zelleTips, data.zelleSales + data.zelleTips, true);
+      if (zelleRows) paymentGroups.push(zelleRows);
+    }
+
+    let contentWidth = 0;
+    if (paymentGroups.length) {
+      contentWidth = Math.max.apply(null,
+        paymentGroups.reduce((acc, g) => acc.concat(g.bodyLines.map(l => l.length), [g.totalLine.length]), [4])
+      );
+      paymentGroups.forEach(function(g) {
+        lines.push(g.name.toUpperCase());
+        lines.push('='.repeat(contentWidth));
+        g.bodyLines.forEach(function(l) { lines.push(l.padStart(contentWidth)); });
+        lines.push('_'.repeat(contentWidth));
+        lines.push(g.totalLine.padStart(contentWidth));
+        lines.push('');
+      });
+    }
+
+    if (Math.abs(data.cardTip) > 0.001) {
+      const cardTipLine = 'CARD tips: ' + fmt(data.cardTip);
+      lines.push(contentWidth ? cardTipLine.padStart(contentWidth) : cardTipLine);
+      lines.push('');
+    }
+
+    const tipsRows = [
+      ['Servers', fmt(data.serverPool)],
+      ['Kitchen', fmt(data.kitchenPool)]
+    ];
+    const tipsTotalLabel = 'Total Tips';
+    const totalTipsVal = fmt(data.totalTip);
+    const tipsLabelWidth = Math.max.apply(null,
+      tipsRows.map(r => r[0].length).concat([tipsTotalLabel.length])
+    );
+    const tipsAmtWidth = Math.max.apply(null,
+      tipsRows.map(r => digitLen(r[1])).concat([digitLen(totalTipsVal)])
+    );
+    const tipsBodyLines = tipsRows.map(r => r[0].padEnd(tipsLabelWidth) + ': ' + alignAmt(r[1], tipsAmtWidth));
+    const totalTipsLine = tipsTotalLabel.padEnd(tipsLabelWidth) + ': ' + alignAmt(totalTipsVal, tipsAmtWidth);
+    const tipsContentWidth = Math.max.apply(null,
+      tipsBodyLines.map(l => l.length).concat([totalTipsLine.length, 4])
+    );
+
     lines.push('TIPS');
-    lines.push('====');
-    lines.push('Servers: ' + fmt(data.serverPool));
-    lines.push('Kitchen: ' + fmt(data.kitchenPool));
-    lines.push('');
-    if (data.cashTip !== 0 || data.totalCash !== 0 || data.cashSales !== 0) {
-      lines.push(fmt(data.cardTip) + ' + ' + fmt(data.cashTip) + ' = ' + fmt(data.totalTip));
-      lines.push('CardTip     CashTip     Total Tips');
-    } else {
-      lines.push('Total Card Tips: ' + fmt(data.cardTip));
-    }
+    lines.push('='.repeat(tipsContentWidth));
+    tipsBodyLines.forEach(function(l) { lines.push(l.padStart(tipsContentWidth)); });
+    lines.push('_'.repeat(tipsContentWidth));
+    lines.push(totalTipsLine.padStart(tipsContentWidth));
+
     if (data.mode !== 'equal' && data.rate > 0) {
       lines.push('');
       lines.push('Rate (per server per hour): ' + fmt(data.rate));
@@ -568,12 +690,36 @@
     updateNameOptions();
     const cardTip = parseFloat(document.getElementById('cardTip').value) || 0;
     const totalCash = parseFloat(document.getElementById('totalCash').value) || 0;
-    const cashSales = parseFloat(document.getElementById('cashSales').value) || 0;
-    const cashTip = totalCash - cashSales;
-    const totalTip = cardTip + cashTip;
+    const nonCardSales = parseFloat(document.getElementById('cashSales').value) || 0;
+    const zelleEnabled = document.getElementById('enableZelle').checked;
+    const venmoEnabled = document.getElementById('enableVenmo').checked;
+    const transfersEnabled = zelleEnabled || venmoEnabled;
+
+    let zelleSales = 0, zelleTips = 0, venmoSales = 0, venmoTips = 0;
+    let transferSales = 0, transferTips = 0, cashSales = nonCardSales, cashTip, totalTip;
+
+    if (transfersEnabled) {
+      if (zelleEnabled) {
+        zelleSales = parseFloat(document.getElementById('zelleSales').value) || 0;
+        zelleTips = parseFloat(document.getElementById('zelleTips').value) || 0;
+      }
+      if (venmoEnabled) {
+        venmoSales = parseFloat(document.getElementById('venmoSales').value) || 0;
+        venmoTips = parseFloat(document.getElementById('venmoTips').value) || 0;
+      }
+      transferSales = zelleSales + venmoSales;
+      transferTips = zelleTips + venmoTips;
+      cashSales = nonCardSales - transferSales;
+      cashTip = totalCash - cashSales;
+      totalTip = cardTip + cashTip + transferTips;
+    } else {
+      cashTip = totalCash - cashSales;
+      totalTip = cardTip + cashTip;
+    }
 
     document.getElementById('cashTipOut').textContent = fmt(cashTip);
     document.getElementById('totalTipOut').textContent = fmt(totalTip);
+    document.getElementById('transferTipOut').textContent = fmt(transferTips);
 
     const kitchenPool = Math.round(totalTip * 0.30 * 100) / 100;
     const serverPool = Math.round((totalTip - kitchenPool) * 100) / 100;
@@ -595,13 +741,48 @@
       cardTip: cardTip,
       totalCash: totalCash,
       cashSales: cashSales,
+      nonCardSales: nonCardSales,
       cashTip: cashTip,
       totalTip: totalTip,
       serverPool: serverPool,
       kitchenPool: kitchenPool,
-      rate: result.rate
+      rate: result.rate,
+      transfersEnabled: transfersEnabled,
+      zelleEnabled: zelleEnabled,
+      venmoEnabled: venmoEnabled,
+      zelleSales: zelleSales,
+      zelleTips: zelleTips,
+      venmoSales: venmoSales,
+      venmoTips: venmoTips,
+      transferTips: transferTips
     });
   }
+
+  function toggleTransfers() {
+    const zelleEnabled = document.getElementById('enableZelle').checked;
+    const venmoEnabled = document.getElementById('enableVenmo').checked;
+    const anyEnabled = zelleEnabled || venmoEnabled;
+
+    document.getElementById('zelleSection').style.display = zelleEnabled ? 'block' : 'none';
+    document.getElementById('venmoSection').style.display = venmoEnabled ? 'block' : 'none';
+    document.getElementById('transferTipRow').style.display = anyEnabled ? 'block' : 'none';
+
+    let label = 'Cash sales';
+    if (anyEnabled) {
+      const parts = ['cash'];
+      if (zelleEnabled) parts.push('Zelle');
+      if (venmoEnabled) parts.push('Venmo');
+      label = 'Non-card sales (' + parts.join(' + ') + ')';
+    }
+    document.getElementById('cashSalesLabel').textContent = label;
+    calc();
+  }
+  document.getElementById('enableZelle').addEventListener('change', toggleTransfers);
+  document.getElementById('enableVenmo').addEventListener('change', toggleTransfers);
+  ['zelleSales', 'zelleTips', 'venmoSales', 'venmoTips'].forEach(id => {
+    document.getElementById(id).addEventListener('input', calc);
+  });
+
 
   const today = new Date();
   const yyyy = today.getFullYear();
@@ -634,12 +815,64 @@
   });
 
   document.getElementById('printReport').addEventListener('click', function() {
+    setDynamicPageSize();
     window.print();
   });
 
+  function setDynamicPageSize() {
+    const el = document.getElementById('reportOut');
+    el.style.transform = 'none';
+    el.style.width = 'auto';
+
+    const marginIn = 0.3;
+    const pxPerIn = 96; // CSS reference pixel
+    const maxHeightIn = 11 - marginIn * 2; // cap at one US Letter page worth of content
+
+    let contentHeightIn = (el.scrollHeight / pxPerIn) + marginIn * 2;
+    if (contentHeightIn > 11) contentHeightIn = 11; // never exceed a full page
+    if (contentHeightIn < 2) contentHeightIn = 2; // avoid a sliver of a page
+
+    // If content is too tall to fit even a full page at normal size, scale it down instead
+    const maxContentHeightPx = maxHeightIn * pxPerIn;
+    if (el.scrollHeight > maxContentHeightPx) {
+      const scale = maxContentHeightPx / el.scrollHeight;
+      el.style.transformOrigin = 'top left';
+      el.style.transform = 'scale(' + scale + ')';
+      el.style.width = (100 / scale) + '%';
+      contentHeightIn = 11;
+    }
+
+    let styleTag = document.getElementById('dynamicPageSize');
+    if (!styleTag) {
+      styleTag = document.createElement('style');
+      styleTag.id = 'dynamicPageSize';
+      document.head.appendChild(styleTag);
+    }
+    styleTag.textContent = '@page { size: 8.5in ' + contentHeightIn.toFixed(2) + 'in; margin: ' + marginIn + 'in; }';
+  }
+
+  window.addEventListener('afterprint', function() {
+    const el = document.getElementById('reportOut');
+    el.style.transform = 'none';
+    el.style.width = 'auto';
+    const styleTag = document.getElementById('dynamicPageSize');
+    if (styleTag) styleTag.textContent = '';
+  });
+
+
   document.getElementById('imageReport').addEventListener('click', function() {
     const el = document.getElementById('reportOut');
-    html2canvas(el, { backgroundColor: '#ffffff', scale: 2 }).then(function(canvas) {
+    html2canvas(el, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      onclone: function(clonedDoc) {
+        const clonedEl = clonedDoc.getElementById('reportOut');
+        if (clonedEl) {
+          clonedEl.style.fontFamily = "'Courier New', Courier, monospace";
+          clonedEl.style.fontVariantLigatures = 'none';
+        }
+      }
+    }).then(function(canvas) {
       canvas.toBlob(function(blob) {
         const fileName = 'yaichi-tip-report.png';
         const file = new File([blob], fileName, { type: 'image/png' });
@@ -669,6 +902,16 @@
     document.getElementById('cardTip').value = 0;
     document.getElementById('totalCash').value = 0;
     document.getElementById('cashSales').value = 0;
+    document.getElementById('zelleSales').value = 0;
+    document.getElementById('zelleTips').value = 0;
+    document.getElementById('venmoSales').value = 0;
+    document.getElementById('venmoTips').value = 0;
+    document.getElementById('enableZelle').checked = false;
+    document.getElementById('enableVenmo').checked = false;
+    document.getElementById('zelleSection').style.display = 'none';
+    document.getElementById('venmoSection').style.display = 'none';
+    document.getElementById('transferTipRow').style.display = 'none';
+    document.getElementById('cashSalesLabel').textContent = 'Cash sales';
     document.getElementById('shiftType').value = 'lunch';
     document.getElementById('splitMode').value = 'hours';
     const t = new Date();
