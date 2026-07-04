@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Tip Split Calculator</title>
+<style>
+  :root {
+    --bg: #f6f0e4;
+    --surface: #fffdf8;
+    --surface-2: #eee4cf;
+    --border: #d8c9a8;
+    --text: #1c2333;
+    --text-secondary: #5b5645;
+    --text-muted: #8c8570;
+    --navy: #16213e;
+    --accent: #8a1f1f;
+    --accent-tint: #f6e5df;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  .topbar {
+    background: var(--navy);
+    height: 6px;
+  }
+  .wrap {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 20px 16px 60px;
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 4px;
+    color: var(--navy);
+    letter-spacing: 0.02em;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: var(--accent);
+    margin: 0 0 20px;
+    font-weight: 500;
+  }
+  label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    display: block;
+    margin-bottom: 4px;
+  }
+  input, select, button {
+    font-family: inherit;
+    font-size: 15px;
+    color: var(--text);
+  }
+  input[type="number"], input[type="date"], select {
+    width: 100%;
+    height: 40px;
+    border: 1.5px solid var(--accent);
+    border-radius: var(--radius);
+    background: var(--accent-tint);
+    padding: 0 10px;
+    color: var(--text);
+  }
+  input:focus, select:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  button {
+    border: 1.5px solid var(--navy);
+    background: var(--surface);
+    color: var(--navy);
+    font-weight: 500;
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    cursor: pointer;
+  }
+  button:active { transform: scale(0.98); }
+  .top-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .top-row input[type="date"], .top-row select { width: auto; }
+  #dateLabel { font-size: 15px; font-weight: 600; color: var(--navy); }
+  .grid3 {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0,1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .card {
+    background: var(--surface-2);
+    border-radius: var(--radius);
+    padding: 14px;
+  }
+  .stat-label { font-size: 11px; color: var(--text-muted); margin: 0 0 2px; }
+  .stat-value { font-size: 17px; font-weight: 600; margin: 0; color: var(--navy); }
+  .split-summary {
+    background: var(--surface-2);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+  }
+  .split-summary div { display: flex; justify-content: space-between; }
+  .split-summary strong { color: var(--text); font-weight: 600; }
+  .columns {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 20px;
+  }
+  .section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .section-title { font-size: 15px; font-weight: 600; margin: 0; color: var(--navy); }
+  .section-controls { display: flex; gap: 6px; align-items: center; }
+  .section-controls select { width: auto; font-size: 12px; padding: 0 8px; height: 32px; }
+  .section-controls button { font-size: 12px; padding: 6px 10px; }
+  .row {
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .row-top { display: flex; gap: 6px; align-items: center; }
+  .row-top select.rowName { flex: 1.2; min-width: 0; height: 38px; }
+  .row-top input.rowHours { width: 72px; height: 38px; }
+  .rowShare {
+    font-size: 14px;
+    font-weight: 600;
+    min-width: 62px;
+    text-align: right;
+  }
+  .iconbtn {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 16px;
+    line-height: 1;
+  }
+  .shift-entry {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 6px;
+  }
+  .shift-entry input { width: 68px; height: 34px; padding: 0 8px; }
+  .add-shift-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .add-shift-row button { font-size: 11px; padding: 4px 8px; }
+  .rowHoursOut { font-size: 12px; color: var(--text-secondary); }
+  .pool-box {
+    background: var(--surface-2);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    margin-top: 10px;
+    font-size: 13px;
+  }
+  .pool-box div { display: flex; justify-content: space-between; }
+  .pool-box div + div { margin-top: 2px; }
+  .kitchen-box {
+    background: var(--surface-2);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .kitchen-box .stat-value { font-size: 22px; color: var(--accent); }
+  .footnote {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 16px;
+    line-height: 1.5;
+  }
+  .report-section {
+    margin-top: 24px;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+  }
+  .report-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  #reportOut {
+    background: var(--surface-2);
+    border-radius: var(--radius);
+    border-top: 3px solid var(--accent);
+    padding: 14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    margin: 0;
+  }
+  @media (max-width: 560px) {
+    .grid3 { grid-template-columns: 1fr 1fr; }
+    .grid3 > div:nth-child(3) { grid-column: 1 / -1; }
+    .columns { grid-template-columns: 1fr; }
+  }
+  @media print {
+    .topbar { display: none !important; }
+    .wrap > *:not(.report-section) { display: none !important; }
+    .wrap { padding: 0; max-width: 100%; }
+    .report-section { margin: 0; border: none; padding: 0; }
+    .report-section > *:not(#reportOut) { display: none !important; }
+    #reportOut {
+      border: none;
+      background: #fff;
+      margin: 0;
+      padding: 0;
+      box-shadow: none;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="topbar"></div>
+<div class="wrap">
+  <h1>Yaichi &mdash; tip split calculator</h1>
+  <p class="subtitle">70% servers / 30% kitchen, exact to the cent</p>
+
+  <div class="top-row">
+    <input type="date" id="shiftDate" />
+    <div id="shiftWrap" style="display:flex; gap:8px; align-items:center;">
+      <select id="shiftType">
+        <option value="lunch">Lunch</option>
+        <option value="dinner">Dinner</option>
+      </select>
+    </div>
+    <span id="dateLabel"></span>
+    <button id="refreshBtn" style="margin-left:auto;">&#8635; Refresh</button>
+  </div>
+
+  <div class="grid3">
+    <div>
+      <label for="cardTip">Card tips</label>
+      <input type="number" id="cardTip" value="0" min="0" step="0.01" />
+    </div>
+    <div>
+      <label for="totalCash">Total cash</label>
+      <input type="number" id="totalCash" value="0" min="0" step="0.01" />
+    </div>
+    <div>
+      <label for="cashSales" id="cashSalesLabel">Cash sales</label>
+      <input type="number" id="cashSales" value="0" min="0" step="0.01" />
+    </div>
+  </div>
+
+  <div style="display:flex; align-items:center; gap:16px; margin-bottom:1rem; flex-wrap:wrap;">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <input type="checkbox" id="enableZelle" style="width:auto; height:auto;" />
+      <label for="enableZelle" style="font-size:13px; color:var(--text-secondary); margin:0;">Include Zelle</label>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <input type="checkbox" id="enableVenmo" style="width:auto; height:auto;" />
+      <label for="enableVenmo" style="font-size:13px; color:var(--text-secondary); margin:0;">Include Venmo</label>
+    </div>
+  </div>
+
+  <div id="zelleSection" style="display:none; margin-bottom:1rem;">
+    <div class="grid3">
+      <div>
+        <label for="zelleSales">Zelle sales</label>
+        <input type="number" id="zelleSales" value="0" min="0" step="0.01" />
+      </div>
+      <div>
+        <label for="zelleTips">Zelle tips</label>
+        <input type="number" id="zelleTips" value="0" min="0" step="0.01" />
+      </div>
+      <div></div>
+    </div>
+  </div>
+
+  <div id="venmoSection" style="display:none; margin-bottom:1rem;">
+    <div class="grid3">
+      <div>
+        <label for="venmoSales">Venmo sales</label>
+        <input type="number" id="venmoSales" value="0" min="0" step="0.01" />
+      </div>
+      <div>
+        <label for="venmoTips">Venmo tips</label>
+        <input type="number" id="venmoTips" value="0" min="0" step="0.01" />
+      </div>
+      <div></div>
+    </div>
+  </div>
+
+  <div class="grid3">
+    <div class="card">
+      <p class="stat-label">Cash tip</p>
+      <p class="stat-value" id="cashTipOut">$0.00</p>
+    </div>
+    <div class="card">
+      <p class="stat-label">Total tips</p>
+      <p class="stat-value" id="totalTipOut">$0.00</p>
+    </div>
+    <div class="card">
+      <p class="stat-label">Fixed split</p>
+      <p style="font-size:13px; margin:0;">70% servers &rarr; 30% kitchen</p>
+    </div>
+  </div>
+
+  <div id="transferTipRow" class="card" style="display:none; margin-bottom:1rem;">
+    <p class="stat-label">Transfer tips (Zelle + Venmo)</p>
+    <p class="stat-value" id="transferTipOut">$0.00</p>
+  </div>
+
+  <div class="split-summary">
+    <div><span>Kitchen total = total tips &times; 30%</span><strong id="kitchenCalcOut">$0.00</strong></div>
+    <div><span>Server pool = total tips &minus; kitchen total</span><strong id="serverCalcOut">$0.00</strong></div>
+  </div>
+
+  <div class="columns">
+    <div>
+      <div class="section-head">
+        <p class="section-title">Servers (70%)</p>
+        <div class="section-controls">
+          <select id="splitMode">
+            <option value="hours">Split by hours</option>
+            <option value="equal">Split equally</option>
+          </select>
+          <button id="addServer">+ Add</button>
+        </div>
+      </div>
+      <div id="serverRows"></div>
+      <div class="pool-box">
+        <div><span>Pool</span><strong id="serverPoolOut">$0.00</strong></div>
+        <div id="rateRow"><span>Rate (per server per hour)</span><strong id="serverRateOut">$0.00 / hr</strong></div>
+      </div>
+    </div>
+
+    <div>
+      <p class="section-title" style="margin-bottom:10px;">Kitchen (30%)</p>
+      <div class="kitchen-box">
+        <p class="stat-label">Total to split among kitchen staff</p>
+        <p class="stat-value" id="kitchenPoolOut">$0.00</p>
+      </div>
+    </div>
+  </div>
+
+  <p class="footnote" id="footNote">Split by hours: rate = server pool &divide; total hours, rounded to the cent; each server's tip is hours &times; rate, except the last row, which gets the pool minus everyone else so it always totals exactly. Split equally divides the pool evenly the same way. Changing the date or split mode resets the server rows.</p>
+
+  <div class="report-section">
+    <div class="report-head">
+      <p class="section-title">Report</p>
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <button id="copyReport"><span id="copyLabel">Copy</span></button>
+        <button id="printReport">Print / PDF</button>
+        <button id="imageReport">Save image</button>
+        <button id="starPrintBtn">Print to Star Printer</button>
+      </div>
+    </div>
+    <pre id="reportOut"></pre>
+    <p class="footnote" style="margin-top:8px;">"Print to Star Printer" requires the free <b>Star PassPRNT</b> app installed on this device, with your receipt printer already set up in it once (Bluetooth/WLAN/LAN/USB). After that, this button sends straight to it &mdash; no AirPrint needed.</p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+(function() {
+  let serverId = 0;
+  const NAMES = ['Michelle', 'Liza', 'Amy', 'Elle', 'Tracy'];
+
+  function fmt(n) {
+    return '$' + (Math.round(n * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  // Right-justifies the digits of a formatted amount while keeping the $ in a fixed column,
+  // e.g. alignAmt('$840.00', 8) -> '$  840.00', alignAmt('$1,200.00', 8) -> '$1,200.00'
+  function alignAmt(amtStr, digitWidth) {
+    return '$' + amtStr.slice(1).padStart(digitWidth);
+  }
+  function digitLen(amtStr) {
+    return amtStr.length - 1;
+  }
+
+  function nameOptions() {
+    return '<option value="">Choose server</option>' + NAMES.map(n => '<option value="' + n + '">' + n + '</option>').join('');
+  }
+
+  function updateNameOptions() {
+    const rows = Array.from(document.getElementById('serverRows').children);
+    const selectedByRow = rows.map(r => {
+      const sel = r.querySelector('.rowName');
+      return sel ? sel.value : '';
+    });
+    rows.forEach((r, i) => {
+      const sel = r.querySelector('.rowName');
+      if (!sel) return;
+      const current = selectedByRow[i];
+      const usedElsewhere = selectedByRow.filter((v, idx) => idx !== i && v);
+      const available = NAMES.filter(n => !usedElsewhere.includes(n));
+      sel.innerHTML = '<option value="">Choose server</option>' + available.map(n =>
+        '<option value="' + n + '"' + (n === current ? ' selected' : '') + '>' + n + '</option>'
+      ).join('');
+      sel.value = current;
+    });
+  }
+
+  function selectedDate() {
+    const val = document.getElementById('shiftDate').value;
+    if (!val) return new Date();
+    const parts = val.split('-');
+    return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  }
+
+  function isWeekend() {
+    const day = selectedDate().getDay();
+    return day === 0 || day === 6;
+  }
+
+  function splitMode() {
+    return document.getElementById('splitMode').value;
+  }
+
+  const WD = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const MO = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  function shortDateLabel() {
+    const d = selectedDate();
+    return WD[d.getDay()] + ' ' + MO[d.getMonth()] + ' ' + d.getDate();
+  }
+
+  function shiftLabel() {
+    const weekday = !isWeekend();
+    return weekday ? (document.getElementById('shiftType').value === 'lunch' ? 'Lunch' : 'Dinner') : 'All Day';
+  }
+
+  function updateDateLabel() {
+    const weekday = !isWeekend();
+    document.getElementById('shiftWrap').style.display = weekday ? 'flex' : 'none';
+    document.getElementById('dateLabel').textContent = shortDateLabel() + ' \u2013 ' + shiftLabel();
+  }
+
+  function addShiftEntry(shiftsContainer) {
+    const entry = document.createElement('div');
+    entry.className = 'shift-entry';
+    entry.innerHTML =
+      '<input type="number" min="0" step="1" placeholder="h" class="sh" />' +
+      '<span>h</span>' +
+      '<input type="number" min="0" max="59" step="1" placeholder="m" class="sm" />' +
+      '<span>m</span>' +
+      '<button type="button" class="shiftDel iconbtn" aria-label="Remove shift" style="width:26px; height:26px; font-size:13px;">&times;</button>';
+    shiftsContainer.appendChild(entry);
+    entry.querySelectorAll('input').forEach(inp => inp.addEventListener('input', calc));
+    entry.querySelector('.shiftDel').addEventListener('click', function() {
+      if (shiftsContainer.querySelectorAll('.shift-entry').length > 1) {
+        entry.remove();
+        calc();
+      }
+    });
+  }
+
+  function addServerRow(initial) {
+    const container = document.getElementById('serverRows');
+    const id = 'srv-' + (++serverId);
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.dataset.id = id;
+
+    const equal = splitMode() === 'equal';
+
+    if (equal) {
+      row.innerHTML =
+        '<div class="row-top">' +
+          '<select class="rowName">' + nameOptions() + '</select>' +
+          '<span class="rowShare">$0.00</span>' +
+          '<button class="rowDel iconbtn" aria-label="Remove">&times;</button>' +
+        '</div>';
+      container.appendChild(row);
+      if (initial && initial.name) row.querySelector('.rowName').value = initial.name;
+    } else {
+      row.innerHTML =
+        '<div class="row-top">' +
+          '<select class="rowName">' + nameOptions() + '</select>' +
+          '<span class="rowShare">$0.00</span>' +
+          '<button class="rowDel iconbtn" aria-label="Remove">&times;</button>' +
+        '</div>' +
+        '<div class="shiftsContainer"></div>' +
+        '<div class="add-shift-row">' +
+          '<button class="addShift">+ Add shift</button>' +
+          '<span class="rowHoursOut">0.00 h</span>' +
+        '</div>';
+      container.appendChild(row);
+      if (initial && initial.name) row.querySelector('.rowName').value = initial.name;
+      const shiftsContainer = row.querySelector('.shiftsContainer');
+      const shiftsData = (initial && initial.shifts && initial.shifts.length) ? initial.shifts : [{ h: '', m: '' }];
+      shiftsData.forEach(s => {
+        addShiftEntry(shiftsContainer);
+        const lastEntry = shiftsContainer.lastElementChild;
+        lastEntry.querySelector('.sh').value = s.h || '';
+        lastEntry.querySelector('.sm').value = s.m || '';
+      });
+      row.querySelector('.addShift').addEventListener('click', function() { addShiftEntry(shiftsContainer); calc(); });
+    }
+    row.querySelectorAll('input, select').forEach(inp => inp.addEventListener('input', calc));
+    row.querySelector('.rowDel').addEventListener('click', function() { row.remove(); calc(); });
+  }
+
+  function serverHours(row) {
+    if (splitMode() === 'equal') return 1;
+    const entries = Array.from(row.querySelectorAll('.shift-entry'));
+    let totalMin = 0;
+    entries.forEach(en => {
+      const h = parseFloat(en.querySelector('.sh').value) || 0;
+      const m = parseFloat(en.querySelector('.sm').value) || 0;
+      totalMin += h * 60 + m;
+    });
+    const dec = totalMin / 60;
+    const out = row.querySelector('.rowHoursOut');
+    if (out) out.textContent = dec.toFixed(2) + ' h';
+    return dec;
+  }
+
+  function rowName(row, idx) {
+    const sel = row.querySelector('.rowName');
+    const val = sel ? sel.value : '';
+    return val || ('Server ' + (idx + 1));
+  }
+
+  function splitByRate(rows, pool) {
+    const hours = rows.map(serverHours);
+    const totalHours = hours.reduce((a, b) => a + b, 0);
+    const shares = [];
+    if (rows.length === 0) return { rate: 0, shares: shares, hours: hours };
+    if (totalHours === 0) {
+      const even = pool / rows.length;
+      rows.forEach(r => { r.querySelector('.rowShare').textContent = fmt(even); shares.push(even); });
+      return { rate: 0, shares: shares, hours: hours };
+    }
+    const rate = Math.round((pool / totalHours) * 100) / 100;
+    let sumOthers = 0;
+    rows.forEach((r, i) => {
+      if (i < rows.length - 1) {
+        const tip = Math.round(hours[i] * rate * 100) / 100;
+        sumOthers += tip;
+        r.querySelector('.rowShare').textContent = fmt(tip);
+        shares.push(tip);
+      } else {
+        const tip = pool - sumOthers;
+        r.querySelector('.rowShare').textContent = fmt(tip);
+        shares.push(tip);
+      }
+    });
+    return { rate: rate, shares: shares, hours: hours };
+  }
+
+  function rebuildServerRows() {
+    document.getElementById('serverRows').innerHTML = '';
+    addServerRow();
+    addServerRow();
+    calc();
+  }
+
+  function onDateOrShiftChange() {
+    updateDateLabel();
+    rebuildServerRows();
+  }
+
+  function toggleSplitMode() {
+    document.getElementById('rateRow').style.display = splitMode() === 'equal' ? 'none' : 'flex';
+    rebuildServerRows();
+  }
+
+  function buildReport(data) {
+    const lines = [];
+    const dateHeader = shortDateLabel() + ' ' + shiftLabel();
+    lines.push(dateHeader);
+    lines.push('='.repeat(dateHeader.length));
+    lines.push('');
+
+    const rowNames = data.rows.map((r, i) => rowName(r, i));
+    const nameWidth = Math.max.apply(null, rowNames.map(n => n.length).concat([0]));
+    data.rows.forEach((r, i) => {
+      const name = rowNames[i].padEnd(nameWidth);
+      if (data.mode === 'equal' || data.rate === 0) {
+        lines.push(name + ' => ' + fmt(data.shares[i]));
+      } else {
+        lines.push(name + ' => ' + data.hours[i].toFixed(2) + ' hr => ' + fmt(data.shares[i]));
+      }
+    });
+    lines.push('');
+
+    function paymentRows(name, sales, tips, total, includeSales) {
+      const hasSales = includeSales && Math.abs(sales) > 0.001;
+      const hasTips = Math.abs(tips) > 0.001;
+      if (!hasSales && !hasTips) return null;
+
+      const totalLabel = 'Total ' + name;
+      const rows = [];
+      if (includeSales) rows.push(['Sales', fmt(sales)]);
+      rows.push(['Tips', fmt(tips)]);
+      const totalVal = fmt(total);
+
+      const amtWidth = Math.max.apply(null,
+        rows.map(r => digitLen(r[1])).concat([digitLen(totalVal)])
+      );
+
+      const bodyLines = rows.map(r => r[0] + ': ' + alignAmt(r[1], amtWidth));
+      const totalLine = totalLabel + ': ' + alignAmt(totalVal, amtWidth);
+      return { name: name, bodyLines: bodyLines, totalLine: totalLine };
+    }
+
+    const paymentGroups = [];
+    const cashRows = paymentRows('Cash', data.cashSales, data.cashTip, data.totalCash, true);
+    if (cashRows) paymentGroups.push(cashRows);
+    if (data.venmoEnabled) {
+      const venmoRows = paymentRows('Venmo', data.venmoSales, data.venmoTips, data.venmoSales + data.venmoTips, true);
+      if (venmoRows) paymentGroups.push(venmoRows);
+    }
+    if (data.zelleEnabled) {
+      const zelleRows = paymentRows('Zelle', data.zelleSales, data.zelleTips, data.zelleSales + data.zelleTips, true);
+      if (zelleRows) paymentGroups.push(zelleRows);
+    }
+
+    let contentWidth = 0;
+    if (paymentGroups.length) {
+      contentWidth = Math.max.apply(null,
+        paymentGroups.reduce((acc, g) => acc.concat(g.bodyLines.map(l => l.length), [g.totalLine.length]), [4])
+      );
+      paymentGroups.forEach(function(g) {
+        lines.push(g.name.toUpperCase());
+        lines.push('='.repeat(contentWidth));
+        g.bodyLines.forEach(function(l) { lines.push(l.padStart(contentWidth)); });
+        lines.push('_'.repeat(contentWidth));
+        lines.push(g.totalLine.padStart(contentWidth));
+        lines.push('');
+      });
+    }
+
+    if (Math.abs(data.cardTip) > 0.001) {
+      const cardTipLine = 'CARD tips: ' + fmt(data.cardTip);
+      lines.push(contentWidth ? cardTipLine.padStart(contentWidth) : cardTipLine);
+      lines.push('');
+    }
+
+    const tipsRows = [
+      ['Servers', fmt(data.serverPool)],
+      ['Kitchen', fmt(data.kitchenPool)]
+    ];
+    const tipsTotalLabel = 'Total Tips';
+    const totalTipsVal = fmt(data.totalTip);
+    const tipsLabelWidth = Math.max.apply(null,
+      tipsRows.map(r => r[0].length).concat([tipsTotalLabel.length])
+    );
+    const tipsAmtWidth = Math.max.apply(null,
+      tipsRows.map(r => digitLen(r[1])).concat([digitLen(totalTipsVal)])
+    );
+    const tipsBodyLines = tipsRows.map(r => r[0].padEnd(tipsLabelWidth) + ': ' + alignAmt(r[1], tipsAmtWidth));
+    const totalTipsLine = tipsTotalLabel.padEnd(tipsLabelWidth) + ': ' + alignAmt(totalTipsVal, tipsAmtWidth);
+    const tipsContentWidth = Math.max.apply(null,
+      tipsBodyLines.map(l => l.length).concat([totalTipsLine.length, 4])
+    );
+
+    lines.push('TIPS');
+    lines.push('='.repeat(tipsContentWidth));
+    tipsBodyLines.forEach(function(l) { lines.push(l.padStart(tipsContentWidth)); });
+    lines.push('_'.repeat(tipsContentWidth));
+    lines.push(totalTipsLine.padStart(tipsContentWidth));
+
+    if (data.mode !== 'equal' && data.rate > 0) {
+      lines.push('');
+      lines.push('Rate (per server per hour): ' + fmt(data.rate));
+    }
+    return lines.join('\n');
+  }
+
+  function calc() {
+    updateNameOptions();
+    const cardTip = parseFloat(document.getElementById('cardTip').value) || 0;
+    const totalCash = parseFloat(document.getElementById('totalCash').value) || 0;
+    const nonCardSales = parseFloat(document.getElementById('cashSales').value) || 0;
+    const zelleEnabled = document.getElementById('enableZelle').checked;
+    const venmoEnabled = document.getElementById('enableVenmo').checked;
+    const transfersEnabled = zelleEnabled || venmoEnabled;
+
+    let zelleSales = 0, zelleTips = 0, venmoSales = 0, venmoTips = 0;
+    let transferSales = 0, transferTips = 0, cashSales = nonCardSales, cashTip, totalTip;
+
+    if (transfersEnabled) {
+      if (zelleEnabled) {
+        zelleSales = parseFloat(document.getElementById('zelleSales').value) || 0;
+        zelleTips = parseFloat(document.getElementById('zelleTips').value) || 0;
+      }
+      if (venmoEnabled) {
+        venmoSales = parseFloat(document.getElementById('venmoSales').value) || 0;
+        venmoTips = parseFloat(document.getElementById('venmoTips').value) || 0;
+      }
+      transferSales = zelleSales + venmoSales;
+      transferTips = zelleTips + venmoTips;
+      cashSales = nonCardSales - transferSales;
+      cashTip = totalCash - cashSales;
+      totalTip = cardTip + cashTip + transferTips;
+    } else {
+      cashTip = totalCash - cashSales;
+      totalTip = cardTip + cashTip;
+    }
+
+    document.getElementById('cashTipOut').textContent = fmt(cashTip);
+    document.getElementById('totalTipOut').textContent = fmt(totalTip);
+    document.getElementById('transferTipOut').textContent = fmt(transferTips);
+
+    const kitchenPool = Math.round(totalTip * 0.30 * 100) / 100;
+    const serverPool = Math.round((totalTip - kitchenPool) * 100) / 100;
+
+    document.getElementById('kitchenCalcOut').textContent = fmt(kitchenPool);
+    document.getElementById('serverCalcOut').textContent = fmt(serverPool);
+    document.getElementById('serverPoolOut').textContent = fmt(serverPool);
+    document.getElementById('kitchenPoolOut').textContent = fmt(kitchenPool);
+
+    const serverRows = Array.from(document.getElementById('serverRows').children);
+    const result = splitByRate(serverRows, serverPool);
+    document.getElementById('serverRateOut').textContent = fmt(result.rate) + ' / hr';
+
+    document.getElementById('reportOut').textContent = buildReport({
+      rows: serverRows,
+      mode: splitMode(),
+      hours: result.hours,
+      shares: result.shares,
+      cardTip: cardTip,
+      totalCash: totalCash,
+      cashSales: cashSales,
+      nonCardSales: nonCardSales,
+      cashTip: cashTip,
+      totalTip: totalTip,
+      serverPool: serverPool,
+      kitchenPool: kitchenPool,
+      rate: result.rate,
+      transfersEnabled: transfersEnabled,
+      zelleEnabled: zelleEnabled,
+      venmoEnabled: venmoEnabled,
+      zelleSales: zelleSales,
+      zelleTips: zelleTips,
+      venmoSales: venmoSales,
+      venmoTips: venmoTips,
+      transferTips: transferTips
+    });
+  }
+
+  function toggleTransfers() {
+    const zelleEnabled = document.getElementById('enableZelle').checked;
+    const venmoEnabled = document.getElementById('enableVenmo').checked;
+    const anyEnabled = zelleEnabled || venmoEnabled;
+
+    document.getElementById('zelleSection').style.display = zelleEnabled ? 'block' : 'none';
+    document.getElementById('venmoSection').style.display = venmoEnabled ? 'block' : 'none';
+    document.getElementById('transferTipRow').style.display = anyEnabled ? 'block' : 'none';
+
+    let label = 'Cash sales';
+    if (anyEnabled) {
+      const parts = ['cash'];
+      if (zelleEnabled) parts.push('Zelle');
+      if (venmoEnabled) parts.push('Venmo');
+      label = 'Non-card sales (' + parts.join(' + ') + ')';
+    }
+    document.getElementById('cashSalesLabel').textContent = label;
+    calc();
+  }
+  document.getElementById('enableZelle').addEventListener('change', toggleTransfers);
+  document.getElementById('enableVenmo').addEventListener('change', toggleTransfers);
+  ['zelleSales', 'zelleTips', 'venmoSales', 'venmoTips'].forEach(id => {
+    document.getElementById(id).addEventListener('input', calc);
+  });
+
+
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  document.getElementById('shiftDate').value = yyyy + '-' + mm + '-' + dd;
+
+  document.getElementById('shiftDate').addEventListener('change', onDateOrShiftChange);
+  document.getElementById('shiftType').addEventListener('change', onDateOrShiftChange);
+  document.getElementById('splitMode').addEventListener('change', toggleSplitMode);
+  ['cardTip', 'totalCash', 'cashSales'].forEach(id => {
+    document.getElementById(id).addEventListener('input', calc);
+  });
+
+  document.getElementById('addServer').addEventListener('click', function() { addServerRow(); calc(); });
+
+  document.getElementById('copyReport').addEventListener('click', function() {
+    const text = document.getElementById('reportOut').textContent;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(showCopied);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showCopied();
+    }
+  });
+
+  document.getElementById('printReport').addEventListener('click', function() {
+    setDynamicPageSize();
+    window.print();
+  });
+
+  function setDynamicPageSize() {
+    const el = document.getElementById('reportOut');
+    el.style.transform = 'none';
+    el.style.width = 'auto';
+
+    const marginIn = 0.3;
+    const pxPerIn = 96; // CSS reference pixel
+    const maxHeightIn = 11 - marginIn * 2; // cap at one US Letter page worth of content
+
+    let contentHeightIn = (el.scrollHeight / pxPerIn) + marginIn * 2;
+    if (contentHeightIn > 11) contentHeightIn = 11; // never exceed a full page
+    if (contentHeightIn < 2) contentHeightIn = 2; // avoid a sliver of a page
+
+    // If content is too tall to fit even a full page at normal size, scale it down instead
+    const maxContentHeightPx = maxHeightIn * pxPerIn;
+    if (el.scrollHeight > maxContentHeightPx) {
+      const scale = maxContentHeightPx / el.scrollHeight;
+      el.style.transformOrigin = 'top left';
+      el.style.transform = 'scale(' + scale + ')';
+      el.style.width = (100 / scale) + '%';
+      contentHeightIn = 11;
+    }
+
+    let styleTag = document.getElementById('dynamicPageSize');
+    if (!styleTag) {
+      styleTag = document.createElement('style');
+      styleTag.id = 'dynamicPageSize';
+      document.head.appendChild(styleTag);
+    }
+    styleTag.textContent = '@page { size: 8.5in ' + contentHeightIn.toFixed(2) + 'in; margin: ' + marginIn + 'in; }';
+  }
+
+  window.addEventListener('afterprint', function() {
+    const el = document.getElementById('reportOut');
+    el.style.transform = 'none';
+    el.style.width = 'auto';
+    const styleTag = document.getElementById('dynamicPageSize');
+    if (styleTag) styleTag.textContent = '';
+  });
+
+
+  document.getElementById('imageReport').addEventListener('click', function() {
+    const el = document.getElementById('reportOut');
+    html2canvas(el, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      onclone: function(clonedDoc) {
+        const clonedEl = clonedDoc.getElementById('reportOut');
+        if (clonedEl) {
+          clonedEl.style.fontFamily = "'Courier New', Courier, monospace";
+          clonedEl.style.fontVariantLigatures = 'none';
+        }
+      }
+    }).then(function(canvas) {
+      canvas.toBlob(function(blob) {
+        const fileName = 'yaichi-tip-report.png';
+        const file = new File([blob], fileName, { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file], title: 'Tip report' }).catch(function() {});
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
+        }
+      }, 'image/png');
+    });
+  });
+
+  document.getElementById('starPrintBtn').addEventListener('click', function() {
+    const reportText = document.getElementById('reportOut').textContent;
+    const escaped = reportText
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    const htmlContent =
+      '<html><head><meta charset="utf-8">' +
+      '<style>body{font-family:monospace;font-size:22px;white-space:pre-wrap;margin:0;padding:6px;}</style>' +
+      '</head><body><pre>' + escaped + '</pre></body></html>';
+    const backUrl = window.location.href;
+    const uri = 'starpassprnt://v1/print/nopreview' +
+      '?back=' + encodeURIComponent(backUrl) +
+      '&html=' + encodeURIComponent(htmlContent) +
+      '&size=3';
+    window.location.href = uri;
+  });
+
+  function showCopied() {
+    const label = document.getElementById('copyLabel');
+    label.textContent = 'Copied';
+    setTimeout(function() { label.textContent = 'Copy'; }, 1500);
+  }
+
+  document.getElementById('refreshBtn').addEventListener('click', function() {
+    document.getElementById('cardTip').value = 0;
+    document.getElementById('totalCash').value = 0;
+    document.getElementById('cashSales').value = 0;
+    document.getElementById('zelleSales').value = 0;
+    document.getElementById('zelleTips').value = 0;
+    document.getElementById('venmoSales').value = 0;
+    document.getElementById('venmoTips').value = 0;
+    document.getElementById('enableZelle').checked = false;
+    document.getElementById('enableVenmo').checked = false;
+    document.getElementById('zelleSection').style.display = 'none';
+    document.getElementById('venmoSection').style.display = 'none';
+    document.getElementById('transferTipRow').style.display = 'none';
+    document.getElementById('cashSalesLabel').textContent = 'Cash sales';
+    document.getElementById('shiftType').value = 'lunch';
+    document.getElementById('splitMode').value = 'hours';
+    const t = new Date();
+    document.getElementById('shiftDate').value = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+    document.getElementById('rateRow').style.display = 'flex';
+    updateDateLabel();
+    rebuildServerRows();
+  });
+
+  updateDateLabel();
+  addServerRow();
+  addServerRow();
+  calc();
+})();
+</script>
+</body>
+</html>
