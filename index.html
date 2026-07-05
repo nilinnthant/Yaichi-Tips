@@ -237,6 +237,16 @@
 </style>
 </head>
 <body>
+<div id="passcodeGate" style="position:fixed; inset:0; background:var(--bg); z-index:999; display:flex; align-items:center; justify-content:center; padding:24px;">
+  <div style="max-width:320px; width:100%; text-align:center;">
+    <h1 style="margin-bottom:8px;">Yaichi &mdash; tip split calculator</h1>
+    <p style="color:var(--text-secondary); font-size:14px; margin-bottom:20px;">Enter the passcode to continue. You won't be asked again on this device.</p>
+    <input type="password" id="passcodeInput" placeholder="Passcode" autocomplete="off" style="text-align:center; font-size:18px; letter-spacing:2px;" />
+    <button id="passcodeSubmit" style="width:100%; margin-top:12px; padding:12px;">Unlock</button>
+    <p id="passcodeError" style="color:var(--accent); font-size:13px; margin-top:10px; display:none;">Incorrect passcode, try again.</p>
+  </div>
+</div>
+<div id="appRoot" style="display:none;">
 <div class="topbar"></div>
 <div class="wrap">
   <h1>Yaichi &mdash; tip split calculator</h1>
@@ -382,6 +392,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script>
   var firebaseConfig = {
     apiKey: "AIzaSyBlgACe1Ge3FanMFcpSmX6obsMiVFLT9Nc",
@@ -1110,14 +1121,59 @@
     rebuildServerRows();
   });
 
-  updateDateLabel();
-  if (!loadLocalState()) {
-    addServerRow();
-    addServerRow();
-    calc();
+  function initApp() {
+    updateDateLabel();
+    if (!loadLocalState()) {
+      addServerRow();
+      addServerRow();
+      calc();
+    }
+    attachFirebaseSync();
   }
-  attachFirebaseSync();
+
+  var PASSCODE = 'Yaichi668';
+  var appStarted = false;
+
+  function showUnlocked() {
+    document.getElementById('passcodeGate').style.display = 'none';
+    document.getElementById('appRoot').style.display = 'block';
+    if (!appStarted) {
+      appStarted = true;
+      initApp();
+    }
+  }
+
+  function tryPasscode() {
+    const val = document.getElementById('passcodeInput').value;
+    if (val !== PASSCODE) {
+      document.getElementById('passcodeError').style.display = 'block';
+      return;
+    }
+    document.getElementById('passcodeError').style.display = 'none';
+    if (typeof firebase !== 'undefined' && firebase.auth) {
+      firebase.auth().signInAnonymously().catch(function() {
+        // Auth failed (offline, misconfigured, etc.) - still unlock locally this session
+        showUnlocked();
+      });
+    } else {
+      showUnlocked();
+    }
+  }
+
+  document.getElementById('passcodeSubmit').addEventListener('click', tryPasscode);
+  document.getElementById('passcodeInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') tryPasscode();
+  });
+
+  if (typeof firebase !== 'undefined' && firebase.auth) {
+    firebase.auth().onAuthStateChanged(function(user) {
+      if (user) {
+        showUnlocked();
+      }
+    });
+  }
 })();
 </script>
+</div>
 </body>
 </html>
