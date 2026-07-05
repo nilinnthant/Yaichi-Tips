@@ -24,6 +24,7 @@
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-weight: 600;
     -webkit-text-size-adjust: 100%;
   }
   .topbar {
@@ -211,6 +212,7 @@
     padding: 14px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 13px;
+    font-weight: 700;
     line-height: 1.6;
     white-space: pre-wrap;
     margin: 0;
@@ -385,7 +387,11 @@
       </div>
     </div>
     <pre id="reportOut"></pre>
-    <p class="footnote" style="margin-top:8px;">"Print to Star Printer" requires the free <b>Star PassPRNT</b> app installed on this device, with your receipt printer already set up in it once (Bluetooth/WLAN/LAN/USB). After that, this button sends straight to it &mdash; no AirPrint needed.</p>
+    <div style="display:flex; align-items:center; gap:8px; margin-top:10px;">
+      <input type="checkbox" id="printerHostToggle" style="width:auto; height:auto;" />
+      <label for="printerHostToggle" style="font-size:13px; color:var(--text-secondary); margin:0;">This device is connected to the printer</label>
+    </div>
+    <p class="footnote" style="margin-top:8px;">On the device physically connected to the Star printer (with the free <b>Star PassPRNT</b> app already set up), check the box above once. After that, tapping "Print to Star Printer" from <b>any other device</b> sends the job there automatically &mdash; no need to be at that device to print.</p>
   </div>
 </div>
 
@@ -405,9 +411,11 @@
   };
   var firebaseApp = null;
   var firebaseRef = null;
+  var firebasePrintRef = null;
   try {
     firebaseApp = firebase.initializeApp(firebaseConfig);
     firebaseRef = firebase.database().ref('yaichiTipCalcState');
+    firebasePrintRef = firebase.database().ref('yaichiPrintQueue');
   } catch (e) {
     // Firebase failed to load (offline, blocked, etc.) - app still works locally
   }
@@ -928,22 +936,69 @@
     });
   });
 
-  document.getElementById('starPrintBtn').addEventListener('click', function() {
+  var PRINT_HOST_KEY = 'yaichiIsPrinterHost';
+  var lastHandledPrintId = null;
+
+  function buildPrintHtml() {
     const reportText = document.getElementById('reportOut').textContent;
     const escaped = reportText
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
-    const htmlContent =
-      '<html><head><meta charset="utf-8">' +
+    return '<html><head><meta charset="utf-8">' +
       '<style>body{font-family:monospace;font-size:30px;font-weight:bold;line-height:1.3;white-space:pre-wrap;margin:0;padding:6px;}</style>' +
       '</head><body><pre>' + escaped + '</pre></body></html>';
+  }
+
+  function firePrintURI(htmlContent) {
     const backUrl = window.location.href;
     const uri = 'starpassprnt://v1/print/nopreview' +
       '?back=' + encodeURIComponent(backUrl) +
       '&html=' + encodeURIComponent(htmlContent) +
       '&size=3';
     window.location.href = uri;
+  }
+
+  function isPrinterHost() {
+    try { return localStorage.getItem(PRINT_HOST_KEY) === 'true'; } catch (e) { return false; }
+  }
+
+  function setPrinterHost(val) {
+    try { localStorage.setItem(PRINT_HOST_KEY, val ? 'true' : 'false'); } catch (e) {}
+  }
+
+  function attachPrinterHostListener() {
+    if (!firebasePrintRef) return;
+    firebasePrintRef.on('value', function(snap) {
+      const data = snap.val();
+      if (!data || !data.id || data.id === lastHandledPrintId) return;
+      lastHandledPrintId = data.id;
+      firePrintURI(data.html);
+    });
+  }
+
+  const printerHostToggle = document.getElementById('printerHostToggle');
+  printerHostToggle.checked = isPrinterHost();
+  if (isPrinterHost()) attachPrinterHostListener();
+  printerHostToggle.addEventListener('change', function() {
+    setPrinterHost(printerHostToggle.checked);
+    if (printerHostToggle.checked) attachPrinterHostListener();
+  });
+
+  document.getElementById('starPrintBtn').addEventListener('click', function() {
+    const htmlContent = buildPrintHtml();
+    if (firebasePrintRef) {
+      const printId = Date.now() + '-' + Math.random().toString(36).slice(2);
+      firebasePrintRef.set({ html: htmlContent, id: printId, requestedAt: Date.now() }).then(function() {
+        if (!isPrinterHost()) {
+          alert('Sent to the printer device.');
+        }
+      }).catch(function() {
+        firePrintURI(htmlContent);
+      });
+    } else {
+      firePrintURI(htmlContent);
+    }
   });
 
   function showCopied() {
@@ -1098,6 +1153,7 @@
   }, 60000);
 
   document.getElementById('refreshBtn').addEventListener('click', function() {
+    if (!confirm('Clear all entered data for this shift? This cannot be undone.')) return;
     clearSavedState();
     document.getElementById('cardTip').value = 0;
     document.getElementById('totalCash').value = 0;
