@@ -251,7 +251,8 @@
       </select>
     </div>
     <span id="dateLabel"></span>
-    <button id="refreshBtn" style="margin-left:auto;">&#8635; Refresh</button>
+    <span id="syncStatus" style="font-size:11px; color:var(--text-muted);"></span>
+    <button id="refreshBtn" style="margin-left:auto;">&#8635; Clear</button>
   </div>
 
   <div class="grid3">
@@ -379,6 +380,27 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script>
+  var firebaseConfig = {
+    apiKey: "AIzaSyBlgACe1Ge3FanMFcpSmX6obsMiVFLT9Nc",
+    authDomain: "yaichi-d8568.firebaseapp.com",
+    databaseURL: "https://yaichi-d8568-default-rtdb.firebaseio.com",
+    projectId: "yaichi-d8568",
+    storageBucket: "yaichi-d8568.firebasestorage.app",
+    messagingSenderId: "196735829061",
+    appId: "1:196735829061:web:a6b1627c2520f60cb04f2c"
+  };
+  var firebaseApp = null;
+  var firebaseRef = null;
+  try {
+    firebaseApp = firebase.initializeApp(firebaseConfig);
+    firebaseRef = firebase.database().ref('yaichiTipCalcState');
+  } catch (e) {
+    // Firebase failed to load (offline, blocked, etc.) - app still works locally
+  }
+</script>
 <script>
 (function() {
   let serverId = 0;
@@ -758,6 +780,7 @@
       venmoTips: venmoTips,
       transferTips: transferTips
     });
+    saveState();
   }
 
   function toggleTransfers() {
@@ -918,7 +941,153 @@
     setTimeout(function() { label.textContent = 'Copy'; }, 1500);
   }
 
+  const STORAGE_KEY = 'yaichiTipCalcState';
+  let restoring = false;
+  let lastWrittenAt = 0;
+  let saveTimer = null;
+
+  function todayStr() {
+    const t = new Date();
+    return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+  }
+
+  function setSyncStatus(text) {
+    const el = document.getElementById('syncStatus');
+    if (el) el.textContent = text;
+  }
+
+  function collectState() {
+    const rows = Array.from(document.getElementById('serverRows').children).map(function(r) {
+      const nameSel = r.querySelector('.rowName');
+      return {
+        name: nameSel ? nameSel.value : '',
+        shifts: Array.from(r.querySelectorAll('.shift-entry')).map(function(en) {
+          return { h: en.querySelector('.sh').value, m: en.querySelector('.sm').value };
+        })
+      };
+    });
+    return {
+      cardTip: document.getElementById('cardTip').value,
+      totalCash: document.getElementById('totalCash').value,
+      cashSales: document.getElementById('cashSales').value,
+      enableZelle: document.getElementById('enableZelle').checked,
+      enableVenmo: document.getElementById('enableVenmo').checked,
+      zelleSales: document.getElementById('zelleSales').value,
+      zelleTips: document.getElementById('zelleTips').value,
+      venmoSales: document.getElementById('venmoSales').value,
+      venmoTips: document.getElementById('venmoTips').value,
+      shiftDate: document.getElementById('shiftDate').value,
+      shiftType: document.getElementById('shiftType').value,
+      splitMode: document.getElementById('splitMode').value,
+      rows: rows,
+      savedOn: todayStr(),
+      updatedAt: Date.now()
+    };
+  }
+
+  function saveState() {
+    if (restoring) return;
+    clearTimeout(saveTimer);
+    setSyncStatus('Saving\u2026');
+    saveTimer = setTimeout(function() {
+      const state = collectState();
+      lastWrittenAt = state.updatedAt;
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+      if (firebaseRef) {
+        firebaseRef.set(state).then(function() {
+          setSyncStatus('Synced');
+        }).catch(function() {
+          setSyncStatus('Offline (saved on this device)');
+        });
+      } else {
+        setSyncStatus('Offline (saved on this device)');
+      }
+    }, 400);
+  }
+
+  function applyState(state) {
+    restoring = true;
+    document.getElementById('cardTip').value = state.cardTip || 0;
+    document.getElementById('totalCash').value = state.totalCash || 0;
+    document.getElementById('cashSales').value = state.cashSales || 0;
+    document.getElementById('enableZelle').checked = !!state.enableZelle;
+    document.getElementById('enableVenmo').checked = !!state.enableVenmo;
+    document.getElementById('zelleSales').value = state.zelleSales || 0;
+    document.getElementById('zelleTips').value = state.zelleTips || 0;
+    document.getElementById('venmoSales').value = state.venmoSales || 0;
+    document.getElementById('venmoTips').value = state.venmoTips || 0;
+    if (state.shiftDate) document.getElementById('shiftDate').value = state.shiftDate;
+    document.getElementById('shiftType').value = state.shiftType || 'lunch';
+    document.getElementById('splitMode').value = state.splitMode || 'hours';
+
+    toggleTransfers();
+    updateDateLabel();
+
+    document.getElementById('serverRows').innerHTML = '';
+    const rows = (state.rows && state.rows.length) ? state.rows : [{}, {}];
+    rows.forEach(function(r) { addServerRow(r); });
+
+    restoring = false;
+    calc();
+  }
+
+  function isTypingInField() {
+    const active = document.activeElement;
+    return active && (active.tagName === 'INPUT' || active.tagName === 'SELECT');
+  }
+
+  function loadLocalState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const state = JSON.parse(raw);
+        if (state.savedOn !== todayStr()) {
+          localStorage.removeItem(STORAGE_KEY);
+          return false;
+        }
+        applyState(state);
+        return true;
+      }
+    } catch (e) {
+      // ignore corrupt/unavailable storage and fall back to defaults
+    }
+    return false;
+  }
+
+  function attachFirebaseSync() {
+    if (!firebaseRef) return;
+    firebaseRef.on('value', function(snapshot) {
+      const state = snapshot.val();
+      if (!state) return;
+      if (state.updatedAt === lastWrittenAt) return; // our own write echoing back
+      if (state.savedOn !== todayStr()) return; // stale, midnight check handles clearing
+      if (isTypingInField()) return; // don't yank focus while someone's mid-entry
+      applyState(state);
+      setSyncStatus('Updated from another device');
+    });
+  }
+
+  function clearSavedState() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+    if (firebaseRef) {
+      try { firebaseRef.remove(); } catch (e) {}
+    }
+  }
+
+  setInterval(function() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const state = JSON.parse(raw);
+        if (state.savedOn !== todayStr()) {
+          clearSavedState();
+        }
+      }
+    } catch (e) {}
+  }, 60000);
+
   document.getElementById('refreshBtn').addEventListener('click', function() {
+    clearSavedState();
     document.getElementById('cardTip').value = 0;
     document.getElementById('totalCash').value = 0;
     document.getElementById('cashSales').value = 0;
@@ -942,9 +1111,12 @@
   });
 
   updateDateLabel();
-  addServerRow();
-  addServerRow();
-  calc();
+  if (!loadLocalState()) {
+    addServerRow();
+    addServerRow();
+    calc();
+  }
+  attachFirebaseSync();
 })();
 </script>
 </body>
