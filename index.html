@@ -969,11 +969,23 @@
 
   function attachPrinterHostListener() {
     if (!firebasePrintRef) return;
-    firebasePrintRef.on('value', function(snap) {
-      const data = snap.val();
-      if (!data || !data.id || data.id === lastHandledPrintId) return;
-      lastHandledPrintId = data.id;
-      firePrintURI(data.html);
+    firebasePrintRef.once('value').then(function(snap) {
+      const existing = snap.val();
+      if (existing && existing.id) lastHandledPrintId = existing.id;
+      firebasePrintRef.on('value', function(snap2) {
+        const data = snap2.val();
+        if (!data || !data.id || data.id === lastHandledPrintId) return;
+        lastHandledPrintId = data.id;
+        firePrintURI(data.html);
+      });
+    }).catch(function() {
+      // if the initial read fails, still attach the listener so future jobs aren't missed
+      firebasePrintRef.on('value', function(snap2) {
+        const data = snap2.val();
+        if (!data || !data.id || data.id === lastHandledPrintId) return;
+        lastHandledPrintId = data.id;
+        firePrintURI(data.html);
+      });
     });
   }
 
