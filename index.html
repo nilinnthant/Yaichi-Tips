@@ -724,7 +724,8 @@
 
     if (data.mode !== 'equal' && data.rate > 0) {
       lines.push('');
-      lines.push('Rate (per server per hour): ' + fmt(data.rate));
+      lines.push('Rate: ' + fmt(data.rate));
+      lines.push('(per server per hour)');
     }
     return lines.join('\n');
   }
@@ -946,7 +947,7 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
     return '<html><head><meta charset="utf-8">' +
-      '<style>body{font-family:monospace;font-size:30px;font-weight:900;line-height:1.3;white-space:pre-wrap;margin:0;padding:6px;}</style>' +
+      '<style>body{font-family:monospace;font-size:30px;font-weight:900;-webkit-text-stroke:0.6px currentColor;line-height:1.3;white-space:pre-wrap;margin:0;padding:6px;}</style>' +
       '</head><body><pre>' + escaped + '</pre></body></html>';
   }
 
